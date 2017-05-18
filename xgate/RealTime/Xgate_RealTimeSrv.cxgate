@@ -1,0 +1,540 @@
+
+//#include "Xgate_ClkLcfg.h"
+#include "EcuConf.h"
+#include "GeneralTypeDef.h"
+#include "Xgate_RealTimeSrv.h"
+#include "Ecu.h"
+
+#ifdef XGATE_ENABLE_REALTIME
+#pragma DATA_SEG XGATE_DATA
+#pragma CODE_SEG XGATE_CODE
+#pragma CONST_SEG XGATE_CONST
+
+// Scl
+#define Xgate_ExternTimer_Scl_GetVal() ( \
+    (bool)((getReg8(PORTD) & 0x04U))   /* Return port data */ \
+  )
+
+#define Xgate_ExternTimer_Scl_ClrVal() ( \
+    (void)clrReg8Bits(PORTD, 0x04U)    /* PD2=0x00U */, \
+    (Shadow_D &= 0xFBU)                /* Set appropriate bit in shadow variable */ \
+  )
+
+#define Xgate_ExternTimer_Scl_SetVal() ( \
+    (void)setReg8Bits(PORTD, 0x04U)    /* PD2=0x01U */, \
+    (Shadow_D |= 0x04U)                /* Set appropriate bit in shadow variable */ \
+  )
+
+#define Xgate_ExternTimer_Scl_SetInput() ( \
+    (void)clrReg8Bits(DDRD, 0x04U)     /* DDRD2=0x00U */ \
+  )
+void Xgate_ExternTimer_Scl_SetOutput(void);
+
+
+//Sda
+
+#define Xgate_ExternTimer_Sda_GetVal() ( \
+    (bool)((getReg8(PORTD) & 0x08U))   /* Return port data */ \
+  )
+
+#define Xgate_ExternTimer_Sda_ClrVal() ( \
+    (void)clrReg8Bits(PORTD, 0x08U)    /* PD3=0x00U */, \
+    (Shadow_D &= 0xF7U)                /* Set appropriate bit in shadow variable */ \
+  )
+
+#define Xgate_ExternTimer_Sda_SetVal() ( \
+    (void)setReg8Bits(PORTD, 0x08U)    /* PD3=0x01U */, \
+    (Shadow_D |= 0x08U)                /* Set appropriate bit in shadow variable */ \
+  )
+#define Xgate_ExternTimer_Sda_SetInput() ( \
+    (void)clrReg8Bits(DDRD, 0x08U)     /* DDRD3=0x00U */ \
+  )
+void Xgate_ExternTimer_Sda_SetOutput(void);
+
+//Int
+
+#define Xgate_ExternTimer_Int_GetVal() ( \
+    (bool)((getReg8(PORTD) & 0x02U))   /* Return port data */ \
+  )
+
+typedef struct
+{
+    uWord ProCnt;
+    uByte RdFirFlag;
+}sXgate_RealTimeType;
+
+sXgate_RealTimeType Xgate_RealTime;
+//sRealTimeType Xgate_RealTime;
+//uWord gwd_Xgate_RealTimeDelayRdCnt = 0;
+//uByte gby_Xgate_RealTimeRdFir = 0;
+
+static void Xgate_ClockIf_IICStart(void);
+static void Xgate_ClockIf_IICStop(void);
+static GeneralReturnType Xgate_ClockIf_IICAckDevice(void);
+static void Xgate_ClockIf_IICAckCpu(void);
+static void Xgate_ClockIf_IICNoAckCpu(void);
+static void Xgate_ClockIf_WriteByte(uByte by);
+static uByte Xgate_ClockIf_ReadByte(void);
+static void Xgate_ClockIf_Wait(uByte delay);
+void Xgate_ClockIf_ReadTime(void);
+GeneralReturnType Xgate_ClockIf_WriteTime( sRealTimeType *time);
+
+void Xgate_ExternTimer_Sda_SetOutput(void)
+{
+    setReg8(PORTD, (getReg8(PORTD) & (byte)(~(byte)0x08U)) | (Shadow_D & 0x08U)); /* PD3=Shadow_D[bit 3] */
+    setReg8Bits(DDRD, 0x08U);            /* DDRD3=0x01U */
+}
+void Xgate_ExternTimer_Scl_SetOutput(void)
+{
+    setReg8(PORTD, (getReg8(PORTD) & (byte)(~(byte)0x04U)) | (Shadow_D & 0x04U)); /* PD2=Shadow_D[bit 3] */
+    setReg8Bits(DDRD, 0x04U);            /* DDRD2=0x01U */
+}
+
+//************************************************************/
+// Function: initialize serial port, prepare to send data
+// Trans para: void
+//************************************************************/
+static void Xgate_ClockIf_IICStart(void)
+{
+    //(*Clock_Operation.Clock_Sda.SetVal)();
+    Xgate_ExternTimer_Sda_SetVal();
+    //(*Clock_Operation.Clock_Sda.SetOutput)();
+    Xgate_ExternTimer_Sda_SetOutput();
+    Xgate_ClockIf_Wait(3);
+    //(*Clock_Operation.Clock_Scl.SetVal)();
+    Xgate_ExternTimer_Scl_SetVal();
+    Xgate_ClockIf_Wait(3);
+    //(*Clock_Operation.Clock_Sda.ClrVal)();
+    Xgate_ExternTimer_Sda_ClrVal();
+    Xgate_ClockIf_Wait(3);
+    //(*Clock_Operation.Clock_Scl.ClrVal)();
+    Xgate_ExternTimer_Scl_ClrVal();
+}
+
+//************************************************************/
+// Function: stop seiral port
+// Trans para: void
+//************************************************************/
+static void Xgate_ClockIf_IICStop(void)
+{
+    //(*Clock_Operation.Clock_Sda.ClrVal)();
+    Xgate_ExternTimer_Sda_ClrVal();
+    //(*Clock_Operation.Clock_Sda.SetOutput)();
+    Xgate_ExternTimer_Sda_SetOutput();
+    Xgate_ClockIf_Wait(3);
+    //(*Clock_Operation.Clock_Scl.SetVal)();
+    Xgate_ExternTimer_Scl_SetVal();
+    Xgate_ClockIf_Wait(3);
+    //(*Clock_Operation.Clock_Sda.SetVal)();
+    Xgate_ExternTimer_Sda_SetVal();
+    Xgate_ClockIf_Wait(3);
+}
+
+//************************************************************/
+// Function:
+// Trans para: void
+//************************************************************/
+static GeneralReturnType Xgate_ClockIf_IICAckDevice(void)
+{
+    //(*Clock_Operation.Clock_Sda.SetVal)();
+    Xgate_ExternTimer_Sda_SetVal();
+    Xgate_ClockIf_Wait(3);
+    //(*Clock_Operation.Clock_Sda.SetInput)();
+    Xgate_ExternTimer_Sda_SetInput();
+    //(*Clock_Operation.Clock_Scl.SetVal)();
+    Xgate_ExternTimer_Scl_SetVal();
+    Xgate_ClockIf_Wait(3);
+
+    //if((*Clock_Operation.Clock_Sda.GetVal)())
+    if(Xgate_ExternTimer_Sda_GetVal())
+    {
+        /* no ack presents */
+        Xgate_ClockIf_IICStop();
+        return (GeneralReturnType)CLOCKIF_ERR_IICACK;
+    }
+
+    //(*Clock_Operation.Clock_Scl.ClrVal)();
+    Xgate_ExternTimer_Scl_ClrVal();
+
+    return (GeneralReturnType)CLOCKIF_ERR_OK;
+}
+
+//************************************************************/
+// Function:
+// Trans para: void
+//************************************************************/
+static void Xgate_ClockIf_IICAckCpu(void)
+{
+    //(*Clock_Operation.Clock_Sda.ClrVal)();
+    Xgate_ExternTimer_Sda_ClrVal();
+    //(*Clock_Operation.Clock_Sda.SetOutput)();
+    Xgate_ExternTimer_Sda_SetOutput();
+    Xgate_ClockIf_Wait(3);
+    //(*Clock_Operation.Clock_Scl.SetVal)();
+    Xgate_ExternTimer_Scl_SetVal();
+    Xgate_ClockIf_Wait(3);
+    //(*Clock_Operation.Clock_Scl.ClrVal)();
+    Xgate_ExternTimer_Scl_ClrVal();
+}
+
+//************************************************************/
+// Function:
+// Trans para: void
+//************************************************************/
+static void Xgate_ClockIf_IICNoAckCpu(void)
+{
+    //(*Clock_Operation.Clock_Sda.SetVal)();
+    Xgate_ExternTimer_Sda_SetVal();
+    //(*Clock_Operation.Clock_Sda.SetOutput)();
+    Xgate_ExternTimer_Sda_SetOutput();
+    Xgate_ClockIf_Wait(3);
+    //(*Clock_Operation.Clock_Scl.SetVal)();
+    Xgate_ExternTimer_Scl_SetVal();
+    Xgate_ClockIf_Wait(3);
+    //(*Clock_Operation.Clock_Scl.ClrVal)();
+    Xgate_ExternTimer_Scl_ClrVal();
+}
+
+//************************
+//发送数据
+//************************
+static void Xgate_ClockIf_WriteByte(uByte by)
+{
+    uByte i;
+    uByte data;
+
+    //(*Clock_Operation.Clock_Sda.SetVal)();
+    Xgate_ExternTimer_Sda_SetVal();
+    Xgate_ClockIf_Wait(3);
+    //(*Clock_Operation.Clock_Sda.SetOutput)();
+    Xgate_ExternTimer_Sda_SetOutput();
+
+    for(i = 0; i < 8; i++)
+    {
+        //(*Clock_Operation.Clock_Scl.ClrVal)();
+        Xgate_ExternTimer_Scl_ClrVal();
+
+        Xgate_ClockIf_Wait(3);
+
+        data = by & 0x80;
+        by <<= 1;
+
+        if (data == 0x80)
+        {
+            //(*Clock_Operation.Clock_Sda.SetVal)();
+            Xgate_ExternTimer_Sda_SetVal();
+        }
+        else
+        {
+            //(*Clock_Operation.Clock_Sda.ClrVal)();
+            Xgate_ExternTimer_Sda_ClrVal();
+        }
+
+        Xgate_ClockIf_Wait(3);
+
+        //(*Clock_Operation.Clock_Scl.SetVal)();
+        Xgate_ExternTimer_Scl_SetVal();
+
+        Xgate_ClockIf_Wait(3);
+    }
+
+    //(*Clock_Operation.Clock_Scl.ClrVal)();
+    Xgate_ExternTimer_Scl_ClrVal();
+    Xgate_ClockIf_Wait(3);
+
+    // device ack
+    (void)Xgate_ClockIf_IICAckDevice();
+}
+
+//************************
+//读取数据
+//************************
+static uByte Xgate_ClockIf_ReadByte(void)
+{
+    uByte i;
+    uByte data;
+
+    data = 0;
+
+    //(*Clock_Operation.Clock_Sda.SetVal)();
+    Xgate_ExternTimer_Sda_SetVal();
+    Xgate_ClockIf_Wait(3);
+    //(*Clock_Operation.Clock_Sda.SetInput)();
+    Xgate_ExternTimer_Sda_SetInput();
+
+    for (i = 0; i < 8; i++)
+    {
+        data <<= 1;
+
+        //(*Clock_Operation.Clock_Scl.ClrVal)();
+        Xgate_ExternTimer_Scl_ClrVal();
+        Xgate_ClockIf_Wait(3);
+
+        //(*Clock_Operation.Clock_Scl.SetVal)();
+        Xgate_ExternTimer_Scl_SetVal();
+        Xgate_ClockIf_Wait(3);
+
+        //if((*Clock_Operation.Clock_Sda.GetVal)())
+        if(Xgate_ExternTimer_Sda_GetVal())
+        {
+            data |= 0x01;
+        }
+    }
+
+    //(*Clock_Operation.Clock_Scl.ClrVal)();
+    Xgate_ExternTimer_Scl_ClrVal();
+
+    return data;
+}
+
+//************************
+// short delay
+//************************
+static void Xgate_ClockIf_Wait(uByte delay)
+{
+    uByte i;
+    for(i = delay; i > 0; i--)
+    {
+        asm NOP;
+        asm NOP;
+    }
+}
+
+static void Xgate_ClockIf_WriteRegister(uByte regr, uByte ram, uByte val)
+{
+    Xgate_ClockIf_IICStart();
+    Xgate_ClockIf_WriteByte(regr);
+    Xgate_ClockIf_WriteByte(ram);
+    Xgate_ClockIf_WriteByte(val);   // config WRTC1
+    Xgate_ClockIf_IICStop();
+}
+
+//************************
+// write time,
+//************************
+
+GeneralReturnType Xgate_ClockIf_WriteTime( sRealTimeType *time)
+{
+    uByte i = 0;
+    GeneralReturnType rslt = ERR_OK;
+//    sRealTimeType time_wr;
+//    sRealTimeType time_rd;
+    /*
+        time_wr.year = ((time->year / 10) << 4) + (time->year % 10);
+        time_wr.month = ((time->month / 10) << 4) + (time->month % 10);
+        time_wr.day = ((time->day / 10) << 4) + (time->day % 10);
+        time_wr.hour = ((time->hour / 10) << 4) + (time->hour % 10);
+        time_wr.minute = ((time->minute / 10) << 4) + (time->minute % 10);
+        time_wr.second = ((time->second / 10) << 4) + (time->second % 10);
+    */
+    /*
+    Xgate_ClockIf_IICStart();
+    Xgate_ClockIf_WriteByte(SD2405_WR);
+    Xgate_ClockIf_WriteByte(0x10);
+    Xgate_ClockIf_WriteByte(0x80);   // config WRTC1
+    Xgate_ClockIf_IICStop();
+    */
+    Xgate_ClockIf_WriteRegister(SD2405_WR,0x10,0x80);
+
+    /*
+           Xgate_ClockIf_IICStart();
+           Xgate_ClockIf_WriteByte(SD2405_WR);
+           Xgate_ClockIf_WriteByte(0x0f);
+           Xgate_ClockIf_WriteByte(0x84);   // config WRTC2，WRTC3，enable write
+           Xgate_ClockIf_IICStop();*/
+    Xgate_ClockIf_WriteRegister(SD2405_WR,0x0f,0x84);
+
+    /*
+            Xgate_ClockIf_IICStart();
+            Xgate_ClockIf_WriteByte(SD2405_WR);
+            Xgate_ClockIf_WriteByte(0x06);
+            Xgate_ClockIf_WriteByte(time_wr.year);  		 //year
+            Xgate_ClockIf_IICStop();*/
+    Xgate_ClockIf_WriteRegister(SD2405_WR,0x06,time->year);
+
+    /*
+            Xgate_ClockIf_IICStart();
+            Xgate_ClockIf_WriteByte(SD2405_WR);
+            Xgate_ClockIf_WriteByte(0x05);
+            Xgate_ClockIf_WriteByte(time_wr.month);  		 //month
+            Xgate_ClockIf_IICStop(); */
+    Xgate_ClockIf_WriteRegister(SD2405_WR,0x05,time->month);
+
+    /*
+            Xgate_ClockIf_IICStart();
+            Xgate_ClockIf_WriteByte(SD2405_WR);
+            Xgate_ClockIf_WriteByte(0x04);
+            Xgate_ClockIf_WriteByte(time_wr.day);  		   //day
+            Xgate_ClockIf_IICStop();*/
+    Xgate_ClockIf_WriteRegister(SD2405_WR,0x04,time->day);
+
+    /*
+            Xgate_ClockIf_IICStart();
+            Xgate_ClockIf_WriteByte(SD2405_WR);
+            Xgate_ClockIf_WriteByte(0x02);
+            Xgate_ClockIf_WriteByte(time_wr.hour | 0x80);  //hour
+            Xgate_ClockIf_IICStop(); */
+    Xgate_ClockIf_WriteRegister(SD2405_WR,0x02,(time->hour|0x80));
+
+    /*
+            Xgate_ClockIf_IICStart();
+            Xgate_ClockIf_WriteByte(SD2405_WR);
+            Xgate_ClockIf_WriteByte(0x01);
+            Xgate_ClockIf_WriteByte(time_wr.minute);  	 //min
+            Xgate_ClockIf_IICStop(); */
+    Xgate_ClockIf_WriteRegister(SD2405_WR,0x02,time->minute);
+
+    /*
+            Xgate_ClockIf_IICStart();
+            Xgate_ClockIf_WriteByte(SD2405_WR);
+            Xgate_ClockIf_WriteByte(0x00);
+            Xgate_ClockIf_WriteByte(time_wr.second);  	 //s
+            Xgate_ClockIf_IICStop(); */
+    Xgate_ClockIf_WriteRegister(SD2405_WR,0x02,time->second);
+
+    /*
+            Xgate_ClockIf_ReadTime();
+            {
+                if( (time_wr.year == Xgate_RealTime.year)
+                 && (time_wr.month == Xgate_RealTime.month)
+                 && (time_wr.day == Xgate_RealTime.day)
+                 && (time_wr.hour == Xgate_RealTime.hour)
+                 && (time_wr.minute == Xgate_RealTime.minute)
+                 && (time_wr.second == Xgate_RealTime.second))
+                {
+                    rslt = (GeneralReturnType)CLOCKIF_ERR_OK;
+                    break;
+                }
+                else
+                {
+                    rslt = (GeneralReturnType)CLOCKIF_ERR_WRTIME;
+                }
+            }
+    //        else
+            {
+                rslt = (GeneralReturnType)CLOCKIF_ERR_WRTIME;
+            }
+     */
+
+    return rslt;
+}
+
+//************************
+// read time
+//************************
+
+void Xgate_ClockIf_ReadTime(void)
+{
+    uByte i = 0;
+    uByte btmp;
+    uByte data[6];
+    GeneralReturnType rslt;
+    sRealTimeType time;
+    // read 3 times until read ok
+    while(i < 3)
+    {
+        Xgate_ClockIf_IICStart();
+        Xgate_ClockIf_WriteByte(SD2405_RD);		      // direct read BCD
+
+        data[5] = Xgate_ClockIf_ReadByte();	// second
+        Xgate_ClockIf_IICAckCpu();
+
+        data[4] = Xgate_ClockIf_ReadByte();	// min
+        Xgate_ClockIf_IICAckCpu();
+
+        data[3] = Xgate_ClockIf_ReadByte() & 0x3f;	// hour
+        Xgate_ClockIf_IICAckCpu();
+
+        btmp = Xgate_ClockIf_ReadByte();	          // week, don't care
+        Xgate_ClockIf_IICAckCpu();
+
+        data[2] = Xgate_ClockIf_ReadByte();	// day
+        Xgate_ClockIf_IICAckCpu();
+
+        data[1] = Xgate_ClockIf_ReadByte();	// month
+        Xgate_ClockIf_IICAckCpu();
+
+        data[0] = Xgate_ClockIf_ReadByte();	// year
+        Xgate_ClockIf_IICNoAckCpu();
+
+        Xgate_ClockIf_IICStop();
+
+        // BCD to DEC
+        time.second = (data[5] >> 4) * 10 + (data[5] & 0x0f);
+        time.minute = (data[4] >> 4) * 10 + (data[4] & 0x0f);
+        time.hour = (data[3] >> 4) * 10 + (data[3] & 0x0f);
+        time.day = (data[2] >> 4) * 10 + (data[2] & 0x0f);
+        time.month = (data[1] >> 4) * 10 + (data[1] & 0x0f);
+        time.year = (data[0] >> 4) * 10 + (data[0] & 0x0f);
+
+        // check time in normal value
+        if( (time.year < 100)
+                && (time.month < 13)
+                && (time.day < 32)
+                && (time.hour < 24)
+                && (time.minute < 60)
+                && (time.second < 60) )
+        {
+            rslt = (GeneralReturnType)CLOCKIF_ERR_OK;
+            /*
+                        Xgate_RealTime.second = time.second;
+                        Xgate_RealTime.minute = time.minute;
+                        Xgate_RealTime.hour = time.hour;
+                        Xgate_RealTime.day  = time.day;
+                        Xgate_RealTime.month = time.month;
+                        Xgate_RealTime.year = time.year;
+            */
+            // check sd2405 is reset?
+            if(  (255 == time.year)
+                    &&(255 == time.minute)
+                    &&(255 == time.hour)
+                    &&(255 == time.day)
+                    &&(255 == time.month))
+            {
+                rslt = CLOCKIF_ERR_RDTIME;
+
+                // write default time 2014.01.01.01.01
+                time.year = '4';
+                time.month = '1';
+                time.day = '1';
+                time.hour = '1';
+                time.minute = '1';
+                time.second = '1';
+                (void)Xgate_ClockIf_WriteTime(&time);
+            }
+
+            XGATE_XGATESET_REALTIME(time.second,time.minute,time.hour,time.day,time.month,time.year,rslt);
+            break;
+        }
+        else
+        {
+            rslt = (GeneralReturnType)CLOCKIF_ERR_RDTIME;
+        }
+
+        i++;
+    }
+}
+
+void Xgate_RdRealTimeSrv(void)
+{
+    uByte flag;
+
+    if(0 == Xgate_RealTime.RdFirFlag)
+    {
+        Xgate_RealTime.RdFirFlag = 1;
+        Xgate_RealTime.ProCnt = X_TM_MS(500);
+    }
+    Xgate_RealTime.ProCnt++;
+    if(Xgate_RealTime.ProCnt >= X_TM_MS(500))
+    {
+        Xgate_RealTime.ProCnt = 0;
+        // check weather cpu is also opreate sd2405
+        XGATE_XGATEGET_REALTIME(flag);
+        if(0 == flag)
+        {
+            Xgate_ClockIf_ReadTime();
+        }
+    }
+}
+
+#endif //#ifdef XGATE_ENABLE_REALTIME 

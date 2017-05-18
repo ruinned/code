@@ -1,0 +1,32 @@
+OPEN source 0 0 50 33
+Source:1 < attributes SHOW_CORE 0,TOOLTIP on,TOOLTIP_FORMAT signed,TOOLTIP_MODE details,FREEZE off,MARKS on
+OPEN source 50 0 50 33
+Source:2 < attributes SHOW_CORE 1,TOOLTIP on,TOOLTIP_FORMAT signed,TOOLTIP_MODE details,FREEZE off,MARKS on
+OPEN assembly 0 33 50 14
+Assembly:1 < attributes SHOW_CORE 0,ADR on,CODE off,ABSADR on,SYMB off,FORMAT Auto,FREEZE off,TOPPC 0xFC877B
+OPEN assembly 50 33 50 14
+Assembly:2 < attributes SHOW_CORE 1,ADR off,CODE off,ABSADR on,SYMB off,FORMAT Auto,FREEZE off,TOPPC 0x0
+OPEN register 0 47 35 19
+Register:1 < attributes SHOW_CORE 0,FORMAT AUTO,COMPLEMENT None
+OPEN procedure 35 47 15 19
+Procedure:1 < attributes SHOW_CORE 0,VALUES on,TYPES off
+OPEN register 50 47 35 19
+Register:2 < attributes SHOW_CORE 1,FORMAT AUTO,COMPLEMENT None
+OPEN procedure 85 47 15 19
+Procedure:2 < attributes SHOW_CORE 1,VALUES on,TYPES off
+OPEN data 0 66 25 19
+Data:1 < attributes SHOW_CORE 0,SCOPE global,COMPLEMENT None,FORMAT Symb,MODE automatic,SORT NotSort,UPDATERATE 10,NAMEWIDTH 16
+OPEN data 25 66 28 19
+Data:2 < attributes SHOW_CORE 0,SCOPE local,COMPLEMENT None,FORMAT Symb,MODE periodical,SORT NotSort,UPDATERATE 1,NAMEWIDTH 16
+OPEN data 53 66 22 19
+Data:3 < attributes SHOW_CORE 1,SCOPE global,COMPLEMENT None,FORMAT Symb,MODE periodical,SORT NotSort,UPDATERATE 10,NAMEWIDTH 16
+OPEN data 75 66 25 19
+Data:4 < attributes SHOW_CORE 1,SCOPE local,COMPLEMENT None,FORMAT Symb,MODE automatic,SORT NotSort,UPDATERATE 10,NAMEWIDTH 16
+OPEN memory 0 85 54 15
+Memory < attributes FORMAT hex,COMPLEMENT None,WORD 1,ASC on,ADR on,MODE automatic,UPDATERATE 10,SHOW_ADDRESSSPACE 0,ADDRESS 0x80
+OPEN command 54 85 46 15
+Command < attributes CACHESIZE 1000
+bckcolor 50331647
+font 'Courier New' 9 BLACK
+AUTOSIZE on
+ACTIVATE "Assembly:2" "Procedure:2" "Assembly:1" "Procedure:1" "Register:2" "Command" "Memory" "Register:1" "Data:4" "Data:1" "Source:1" "Data:2" "Data:3" "Source:2"

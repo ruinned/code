@@ -1,0 +1,13 @@
+---- ExternFlashIf_WriteData Matches (6 in 3 files) ----
+Dem_EventMemory.c (e:\work\code\guangqi\bhn02-gac-uds\sources\bsw_task\diag\source\dem):                    ExternFlashIf_WriteData(tempAddr1, (uint8*UDS_FAR)&DemPrimaryMemory[iiloop], ENTRY_LEN);
+Dem_EventMemory.c (e:\work\code\guangqi\bhn02-gac-uds\sources\bsw_task\diag\source\dem):            ExternFlashIf_WriteData(tempAddr2, (uint8*UDS_FAR)&DemEventInfo[tempEventId], STATUS_LEN);
+Dem_EventMemory.c (e:\work\code\guangqi\bhn02-gac-uds\sources\bsw_task\diag\source\dem):            //ExternFlashIf_WriteData(tempAddr1, (uint8*UDS_FAR)&DemPrimaryMemory[iloop], ENTRY_LEN); 
+Dem_EventMemory.c (e:\work\code\guangqi\bhn02-gac-uds\sources\bsw_task\diag\source\dem):            //ExternFlashIf_WriteData(tempAddr2, (uint8*UDS_FAR)&DemEventInfo[tempEventId], STATUS_LEN);     
+ExternFlashIf.c (e:\work\code\guangqi\bhn02-gac-uds\sources\bsw_task\nvm\flash):uWord ExternFlashIf_WriteData(uLWord data_addr, uByte * RAMPTR p_data, uWord dlen) {
+ExternFlashIf.h (e:\work\code\guangqi\bhn02-gac-uds\sources\bsw_task\nvm\flash):extern uWord ExternFlashIf_WriteData(uLWord data_addr, uByte * RAMPTR p_data, uWord dlen);
+---- ExternFlashIf_ReadData Matches (5 in 3 files) ----
+Dem_EventMemory.c (e:\work\code\guangqi\bhn02-gac-uds\sources\bsw_task\diag\source\dem):        ExternFlashIf_ReadData(tempAddr1, (uint8*UDS_FAR)&DemPrimaryMemory[iloop], ENTRY_LEN);                  
+Dem_EventMemory.c (e:\work\code\guangqi\bhn02-gac-uds\sources\bsw_task\diag\source\dem):            ExternFlashIf_ReadData(tempAddr2, (uint8*UDS_FAR)&DemEventInfo[tempEventId], STATUS_LEN);
+Dem_EventMemory.c (e:\work\code\guangqi\bhn02-gac-uds\sources\bsw_task\diag\source\dem):                ExternFlashIf_ReadData(tempAddr1, (uint8*UDS_FAR)&TempMemEntry, ENTRY_LEN);        
+ExternFlashIf.c (e:\work\code\guangqi\bhn02-gac-uds\sources\bsw_task\nvm\flash):uWord ExternFlashIf_ReadData(uLWord data_addr, uByte * RAMPTR p_data, uWord dlen) {
+ExternFlashIf.h (e:\work\code\guangqi\bhn02-gac-uds\sources\bsw_task\nvm\flash):extern uWord ExternFlashIf_ReadData(uLWord data_addr, uByte * RAMPTR p_data, uWord dlen);

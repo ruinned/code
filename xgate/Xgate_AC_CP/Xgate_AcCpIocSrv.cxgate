@@ -1,0 +1,277 @@
+// Xgate_AcCpIoc.cxgate
+//  modify base on AC_CP_IOC.c
+
+#include "Xgate_AcCpIocSrv.h"
+#include "GeneralTypeDef.h"
+#include "Xgate_Config.h"
+#include "Xgate_AcCpIoc.h"
+
+#ifdef XGATE_ENABLE_ACCP
+
+#pragma DATA_SEG XGATE_DATA
+#pragma CODE_SEG XGATE_CODE
+#pragma CONST_SEG XGATE_CONST
+
+//static bool EnUser;                    /* Enable/Disable device by user */
+//volatile bool AC_CP_IOC_EnEvent;       /* Enable/Disable events */
+
+#define  XGATE_TIMECNTFULLVALUE  0xffff  //the timer count is overflow value
+#define  XGATE_TIMEMS_PER_CNT    375     //the time value of per 1 count
+#define  XGATE_TIMEMS_TO_US      1000
+#define  XGATE_IOC_ONEHUNDRED_PERCENT  1000
+
+
+#define XGATE_EDGE_RISE 0
+#define XGATE_EDGE_FALL 1
+
+typedef struct
+{
+    uByte StartFlag;
+    uByte TriggerType;
+    uWord LevelVal[4];       // electrical level value
+    uByte ReadCnt;
+    uByte TriggerCpltFlag;   // have trigger 4 count
+    uByte Duty;
+    uWord Period;
+    uByte CheckCnt;
+    uByte CalPeriodCnt;
+} sXgate_IocType;
+
+sXgate_IocType Xgate_AcCp =
+{
+    0,
+    0,
+    {
+        0,0,0,0
+    },
+    0,
+    0,
+    0
+};
+
+#define  XGATE_CP_PERIOD_UP_LIMIT   1200
+#define  XGATE_CP_PERIOD_DOWN_LIMIT   800
+#define XGATE_MAX_DET_HIGHLEVEL_CNT  20
+
+/*
+** ===================================================================
+**     Method      :  AC_CP_IOC_Enable (component Capture)
+**
+**     Description :
+**         This method enables the component - it starts the capture. Events
+**         may be generated (<DisableEvent>/<EnableEvent>).
+**     Parameters  : None
+**     Returns     :
+**         ---             - Error code, possible codes:
+**                           ERR_OK - OK
+**                           ERR_SPEED - This device does not work in
+**                           the active speed mode
+** ===================================================================
+*/
+byte AC_CP_IOC_Enable(void)
+{
+// if (!EnUser) {                       /* Is the device disabled by user? */
+//   EnUser = TRUE;                     /* If yes then set the flag "device enabled" */
+    /* ECT_TFLG1: C7F=0,C6F=0,C5F=1,C4F=0,C3F=0,C2F=0,C1F=0,C0F=0 */
+    ECT_TFLG1 = 0x20U;                 /* Reset interrupt request flag */
+    ECT_TIE_C5I = 1U;                  /* Enable interrupt */
+    /* ECT_TCTL3: EDG5A=1 */
+    ECT_TCTL3 |= 0x04U;                /* Enable capture function */
+//  }
+    return ERR_OK;                       /* OK */
+}
+
+
+
+uByte  Xgate_AcCpCal(uWord *IocIf_PeriodValuePtr,uByte *IocIf_RatioValuePtr)
+{
+    uLWord llwd_period[2],llwd_avrperiod,llwd_period_cnt[2],llwd_highcnt[2];
+
+    if(1 == Xgate_AcCp.TriggerCpltFlag)
+    {
+        // check high level value is ok?
+        if(Xgate_AcCp.LevelVal[2] >= Xgate_AcCp.LevelVal[0])
+        {
+            llwd_period[0] = Xgate_AcCp.LevelVal[2] - Xgate_AcCp.LevelVal[0];
+        }
+        else
+        {
+            llwd_period[0] = Xgate_AcCp.LevelVal[2];
+            llwd_period[0] += XGATE_TIMECNTFULLVALUE;
+            llwd_period[0] -= Xgate_AcCp.LevelVal[0];
+        }
+        llwd_period_cnt[0] = llwd_period[0];
+        llwd_period[0] *= XGATE_TIMEMS_TO_US;
+        llwd_period[0] /= XGATE_TIMEMS_PER_CNT;
+        if((llwd_period[0] > XGATE_CP_PERIOD_UP_LIMIT) || (llwd_period[0] < XGATE_CP_PERIOD_DOWN_LIMIT))
+        {
+            return 1;
+        }
+
+        // check low value is ok?
+        if(Xgate_AcCp.LevelVal[3] >= Xgate_AcCp.LevelVal[1])
+        {
+            llwd_period[1] = Xgate_AcCp.LevelVal[3] - Xgate_AcCp.LevelVal[1];
+        }
+        else
+        {
+            llwd_period[1] = Xgate_AcCp.LevelVal[3];
+            llwd_period[1] += XGATE_TIMECNTFULLVALUE;
+            llwd_period[1] -= Xgate_AcCp.LevelVal[1];
+        }
+        llwd_period_cnt[1] = llwd_period[1];
+        llwd_period[1] *= XGATE_TIMEMS_TO_US;
+        llwd_period[1] /= XGATE_TIMEMS_PER_CNT;
+        if((llwd_period[1] > XGATE_CP_PERIOD_UP_LIMIT) || (llwd_period[1] < XGATE_CP_PERIOD_DOWN_LIMIT))
+        {
+            return 1;
+        }
+
+        // cal avarage period
+        llwd_avrperiod = llwd_period[0] + llwd_period[1];
+        llwd_avrperiod /= 2;
+        if((llwd_avrperiod > XGATE_CP_PERIOD_UP_LIMIT) || (llwd_avrperiod < XGATE_CP_PERIOD_DOWN_LIMIT))
+        {
+            return 1;
+        }
+
+        // cal high level val
+        if(Xgate_AcCp.LevelVal[1] >= Xgate_AcCp.LevelVal[0])
+        {
+            llwd_highcnt[0] = Xgate_AcCp.LevelVal[1] - Xgate_AcCp.LevelVal[0];
+        }
+        else
+        {
+            llwd_highcnt[0] = Xgate_AcCp.LevelVal[1];
+            llwd_highcnt[0] += XGATE_TIMECNTFULLVALUE;
+            llwd_highcnt[0] -= Xgate_AcCp.LevelVal[0];
+        }
+        if(Xgate_AcCp.LevelVal[3] >= Xgate_AcCp.LevelVal[2])
+        {
+            llwd_highcnt[1] = Xgate_AcCp.LevelVal[3] - Xgate_AcCp.LevelVal[2];
+        }
+        else
+        {
+            llwd_highcnt[1] = Xgate_AcCp.LevelVal[3];
+            llwd_highcnt[1] += XGATE_TIMECNTFULLVALUE;
+            llwd_highcnt[1] -= Xgate_AcCp.LevelVal[2];
+        }
+
+        if((llwd_highcnt[1] - llwd_highcnt[0]) > XGATE_MAX_DET_HIGHLEVEL_CNT)
+        {
+            return 1;
+        }
+
+        llwd_period_cnt[0] += llwd_period_cnt[1];
+        llwd_period_cnt[0] /= 2;
+
+        llwd_highcnt[0] += llwd_highcnt[1];
+        llwd_highcnt[0] /= 2;
+
+        llwd_highcnt[0] = llwd_period_cnt[0] - llwd_highcnt[0];
+
+//        glwd_Xgate_highcnt = llwd_highcnt[0];
+
+        llwd_highcnt[0] *= XGATE_IOC_ONEHUNDRED_PERCENT;
+        if(llwd_period_cnt[0] != 0)
+        {
+            llwd_highcnt[0] /= llwd_period_cnt[0];
+            if((llwd_highcnt[0] % 10) >= 5)
+            {
+                llwd_highcnt[0] /= 10;
+                llwd_highcnt[0]++;
+            }
+            else
+            {
+                llwd_highcnt[0] /= 10;
+            }
+
+            *IocIf_RatioValuePtr = (uByte)(llwd_highcnt[0]);
+            *IocIf_PeriodValuePtr = (uWord)llwd_period[0];
+        }
+        return 0;
+    }
+    return 1;
+}
+
+
+
+void Xgate_AcCpCalVal(void)
+{
+    uWord period;
+    uByte duty;
+    uByte flag;
+
+    Xgate_AcCp.CalPeriodCnt++;
+    if(Xgate_AcCp.CalPeriodCnt >= X_TM_MS(10))
+    {
+        Xgate_AcCp.CalPeriodCnt = 0;
+        /* calculate period and duty */
+        flag = Xgate_AcCpCal(&period,&duty);
+
+        // calculate OK?
+        if(0 == flag)
+        {
+            Xgate_AcCp.CheckCnt = 0;
+            Xgate_AcCp.Duty = duty;
+            Xgate_AcCp.Period = period;
+        }
+        else
+        {
+            Xgate_AcCp.CheckCnt++;
+            if(Xgate_AcCp.CheckCnt >= 10)
+            {
+                Xgate_AcCp.CheckCnt = 10;
+                Xgate_AcCp.Duty = 0;
+                Xgate_AcCp.Period = 0;
+            }
+        }
+
+        /* udpate share ram */
+        XGATE_XGATESETACCP(Xgate_AcCp.Period,Xgate_AcCp.Duty);
+        /* restart next detect */
+        Xgate_AcCp.TriggerCpltFlag = 0;
+        ECT_TCTL3 &= 0xf3;
+        ECT_TCTL3 |= 0x04;
+    }
+}
+
+
+interrupt void Xgate_AcCpIsr(void)
+{
+    /* ECT_TFLG1: C7F=0,C6F=0,C5F=1,C4F=0,C3F=0,C2F=0,C1F=0,C0F=0 */
+    ECT_TFLG1 = 0x20U;                   /* Reset interrupt request flag */
+
+    if(!Xgate_AcCp.TriggerCpltFlag)
+    {
+//        Xgate_AcCp.LevelVal[Xgate_AcCp.ReadCnt] = 0;
+        if(XGATE_EDGE_RISE == Xgate_AcCp.TriggerType)   //the rising trigger if comming
+        {
+            Xgate_AcCp.StartFlag = 1;
+            ECT_TCTL3 &= 0xF3;
+            ECT_TCTL3 |= 0x08; //change to falling trigger
+            Xgate_AcCp.TriggerType = XGATE_EDGE_FALL;
+        }
+        else  //the falling trigger if comming
+        {
+            ECT_TCTL3 &= 0xF3;
+            ECT_TCTL3 |= 0x04;//change to rising trigger
+            Xgate_AcCp.TriggerType = XGATE_EDGE_RISE;
+        }
+        Xgate_AcCp.LevelVal[Xgate_AcCp.ReadCnt] = ECT_TC5;
+        if(1 == Xgate_AcCp.StartFlag)
+        {
+            Xgate_AcCp.ReadCnt++;
+        }
+        if(Xgate_AcCp.ReadCnt >= 4)
+        {
+            Xgate_AcCp.StartFlag = 0;
+            Xgate_AcCp.ReadCnt = 0;
+            Xgate_AcCp.TriggerCpltFlag = 1;
+            ECT_TCTL3 &= 0xf3; //stop trigger
+        }
+    }
+}
+
+
+#endif

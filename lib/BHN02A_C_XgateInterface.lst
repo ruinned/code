@@ -1,0 +1,37 @@
+Units and locations in library 'E:\WorkFile-Lijh\Work\Plaform\Centralized\BHN02-BCU\lib\BHN02A_C_XgateInterface.lib'
+Unit name               size     from       to
+Xgate_AcCpIoc.c.o       5111      149     5260
+Xgate_Config.c.o        3393    26608    30001
+Xgate_ExtFlash.c.o      7061     5260    12321
+Xgate_RealTime.c.o      6377    12321    18698
+Xgate_StartIf.c.o       7910    18698    26608
+
+EXPORTED OBJECTS
+Share_ExtFlashDataBuff       O   (Xgate_ExtFlash.c.o)
+Shared_ExtFlashData          O   (Xgate_ExtFlash.c.o)
+Shared_RealTime              O   (Xgate_RealTime.c.o)
+Timer_1ms_Enable             I   (Xgate_StartIf.c.o)
+XGATE_STACK_H                O   (Xgate_StartIf.c.o)
+XGATE_STACK_L                O   (Xgate_StartIf.c.o)
+XGATE_VectorTable            I   (Xgate_StartIf.c.o)
+Xgate_CpuGetAcCp             F   (Xgate_AcCpIoc.c.o)
+Xgate_CpuGetExtFlah          F   (Xgate_ExtFlash.c.o)
+Xgate_CpuGetRealTime         F   (Xgate_RealTime.c.o)
+Xgate_CpuSetExtFlash         F   (Xgate_ExtFlash.c.o)
+Xgate_CpuSetRealTimeRdEn     F   (Xgate_RealTime.c.o)
+Xgate_CpuSetStart            F   (Xgate_ExtFlash.c.o)
+Xgate_SetupAndStart          F   (Xgate_StartIf.c.o)
+_INT_CFADDR                  I   (Xgate_StartIf.c.o)
+_INT_CFDATA0                 I   (Xgate_StartIf.c.o)
+_INT_XGPRIO                  I   (Xgate_StartIf.c.o)
+_XGISP31                     I   (Xgate_StartIf.c.o)
+_XGISPSEL                    I   (Xgate_StartIf.c.o)
+_XGMCTL                      I   (Xgate_StartIf.c.o)
+_XGSEM                       I   (Xgate_AcCpIoc.c.o)
+_XGSEM                       I   (Xgate_ExtFlash.c.o)
+_XGSEM                       I   (Xgate_RealTime.c.o)
+_XGSWT                       I   (Xgate_ExtFlash.c.o)
+gby_Shard_AcCpDuty           O   (Xgate_AcCpIoc.c.o)
+gby_Shared_RealTimeRdEn      O   (Xgate_RealTime.c.o)
+gwd_Shard_AcCpPeriod         O   (Xgate_AcCpIoc.c.o)
+gwd_Shared_RealTimeRdRslt    O   (Xgate_RealTime.c.o)
